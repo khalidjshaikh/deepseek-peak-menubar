@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return c
     }()
 
+    // App version displayed in the UI
+    private let appVersion: String = "1.0.8"
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.font = NSFont.systemFont(ofSize: 13, weight: .medium)
@@ -28,41 +31,104 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         nextMenuItem.isEnabled = false
         menu.addItem(nextMenuItem)
         menu.addItem(NSMenuItem.separator())
-        let infoItem = NSMenuItem(title: "Peak: 01–04, 06–10 UTC (2×)", action: nil, keyEquivalent: "")
+        let infoItem = NSMenuItem(title: "UTC Peak: Mon-Fri 01:00-04:00, 06:00-10:00 UTC (2×)", action: nil, keyEquivalent: "")
         infoItem.isEnabled = false
         menu.addItem(infoItem)
+        // Version item
+        let versionItem = NSMenuItem(title: "Version: v\(appVersion)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
+        menu.addItem(NSMenuItem.separator())
+        // Separate CT info item
+        let ctInfoItem = NSMenuItem(title: "CT Peak: 8:00-11:00 PM prev day, 1:00-5:00 AM CT (2×)", action: nil, keyEquivalent: "")
+        ctInfoItem.isEnabled = false
+        menu.addItem(ctInfoItem)
+        // Build number item
+        let buildItem = NSMenuItem(title: "Build: 1.0.4", action: nil, keyEquivalent: "")
+        buildItem.isEnabled = false
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
         statusItem.menu = menu
 
         update()
-        timer = Timer.scheduledTimer(timeInterval: 15, target: self, selector: #selector(tick), userInfo: nil, repeats: true)
+        timer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(tick), userInfo: nil, repeats: true)
     }
 
     private func isPeakNow() -> Bool {
-        let comps = utcCalendar.dateComponents([.hour, .minute], from: Date())
+        let comps = utcCalendar.dateComponents([.hour, .minute, .weekday], from: Date())
         let minutes = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
-        let first = minutes >= 60 && minutes < 240   // 01:00–04:00
-        let second = minutes >= 360 && minutes < 600  // 06:00–10:00
+        let weekday = comps.weekday ?? 1
+        // Monday=1, Tuesday=2, Wednesday=3, Thursday=4, Friday=5, Saturday=6, Sunday=7
+        let isWeekday = weekday >= 1 && weekday <= 5
+        let first = isWeekday && minutes >= 60 && minutes < 240   // 01:00–04:00
+        let second = isWeekday && minutes >= 360 && minutes < 600  // 06:00–10:00
         return first || second
     }
 
     private func nextTransitionDescription() -> String {
-        // nearest boundary among 01:00,04:00,06:00,10:00
-        let comps = utcCalendar.dateComponents([.hour, .minute], from: Date())
+        // nearest boundary among 01:00,04:00,06:00,10:00, considering weekday
+        let comps = utcCalendar.dateComponents([.hour, .minute, .weekday], from: Date())
         let minutes = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
-        let boundaries = [60, 240, 360, 600, 60 + 1440, 240 + 1440, 360 + 1440, 600 + 1440]
-        guard let next = boundaries.first(where: { $0 > minutes }) else { return "" }
-        let delta = next - minutes
-        let h = delta / 60
-        let m = delta % 60
+        let weekday = comps.weekday ?? 1
+        let isWeekday = weekday >= 1 && weekday <= 5
+
+        var nextMinutes: Int?
+        var nextWeekday: Int?
+
+        // Check today's boundaries first if it's a weekday
+        if isWeekday {
+            let boundaries = [60, 240, 360, 600]
+            let next = boundaries.first(where: { $0 > minutes })
+            if let next = next {
+                nextMinutes = next
+                nextWeekday = weekday
+            } else {
+                // No more boundaries today; find next weekday 01:00
+                // (instead of hardcoding Monday)
+            }
+        }
+
+        // If no today boundary found or it's weekend, find next weekday 01:00
+        if nextMinutes == nil {
+            // Find next weekday starting from tomorrow
+            for i in 1...7 {
+                let day = (weekday + i - 1) % 7 + 1  // next days, wrapping
+                if day >= 1 && day <= 5 {
+                    nextWeekday = day
+                    nextMinutes = 60  // 01:00
+                    break
+                }
+            }
+        }
+
+        guard let minutes = nextMinutes, let weekday = nextWeekday else { return "" }
+        // Compute delta from now in seconds for h/m/s breakdown
+        let nowComps = utcCalendar.dateComponents([.hour, .minute], from: Date())
+        let nowMinutes = (nowComps.hour ?? 0) * 60 + (nowComps.minute ?? 0)
+        let delta = minutes - nowMinutes
+        let adjustedDelta = delta > 0 ? delta : delta + 1440
+        // Break down adjustedDelta (in minutes) into h/m/s
+        let deltaTotalSeconds = adjustedDelta * 60
+        let h = deltaTotalSeconds / 3600
+        let m = (deltaTotalSeconds / 60) % 60
+        let deltaS = deltaTotalSeconds % 60
+        let weekdayName: String
+        switch weekday {
+        case 1: weekdayName = "Mon"
+        case 2: weekdayName = "Tue"
+        case 3: weekdayName = "Wed"
+        case 4: weekdayName = "Thu"
+        case 5: weekdayName = "Fri"
+        default: weekdayName = ""
+        }
+        // Show seconds as :00 since we only track minute granularity
+        let totalSeconds = minutes * 60
+        let nowSeconds = nowMinutes * 60
+        let s = (totalSeconds - nowSeconds) % 60
         let timeStr: String
-        let mod = next % 1440
-        let hh = mod / 60
-        let mm = mod % 60
-        timeStr = String(format: "%02d:%02d UTC", hh, mm)
-        return "Changes in \(h)h \(m)m (at \(timeStr))"
+        timeStr = String(format: "%02d:%02d:%02d UTC", (minutes / 60) % 24, minutes % 60, s)
+        return "Changes in \(h)h \(m)m \(deltaS)s (at \(timeStr)) on \(weekdayName)"
     }
 
     private func update() {

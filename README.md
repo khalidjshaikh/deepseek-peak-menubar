@@ -3,8 +3,8 @@
 A macOS menu bar app that shows whether you're currently in DeepSeek **peak** (2× cost) or **off-peak** hours.
 
 Peak hours (UTC):
-- 01:00–04:00
-- 06:00–10:00
+- Monday–Friday: 01:00–04:00 and 06:00–10:00
+- Weekends (Saturday–Sunday): off-peak
 
 All other times are off-peak.
 
