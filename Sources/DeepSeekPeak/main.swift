@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     // App version displayed in the UI
-    private let appVersion: String = "1.0.8"
+    private let appVersion: String = "1.0.9"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

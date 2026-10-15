@@ -80,5 +80,5 @@ sleep 3
 echo "  → ${APP_NAME} launched."
 echo ""
 echo "=== Deploy complete! ==="
-echo "DeepSeekPeak should now be running with the updated peak hours (v${APP_VERSION:-1.0.1})."
+echo "DeepSeekPeak should now be running with the updated peak hours (v${APP_VERSION:-1.0.9})."
 echo "Check the menu bar for Mon-Fri peak status and next transition times."
